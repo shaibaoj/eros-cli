@@ -19,6 +19,12 @@ var fs = require('fs'),
     exists = require('fs').existsSync,
     weexErosPack = require('./weexErosPack');
 
+var md5 = require('md5');    
+
+var co = require('co');
+var OSS = require('ali-oss');
+var fs = require('fs');
+
 var readConfig = require('../readConfig'),
     shell = require('shelljs');
 
@@ -28,6 +34,17 @@ var versionMap = [],
     assetsTag = path.sep + 'assets' + path.sep,
     appName = readConfig.get('appName'),
     versionInfo = readConfig.get('version');
+
+    if(argv.p){
+        appName = argv.p;
+    }
+    
+    if(argv.ios){
+        versionInfo['iOS'] = argv.ios;
+    }
+    if(argv.android){
+        versionInfo['android'] = argv.android;
+    }  
 
 function getIconfontMd5() {
     return through.obj(function(file, enc, cb) {
@@ -145,6 +162,7 @@ function getMd5Version() {
 function makeDiffZip({ jsVersion, platform }) {
     return new Promise((resolve) => {
         var zipFolder = readConfig.get('diff').pwd;
+        var appName = readConfig.get('appName');
 
         if (argv.d || argv.diff || argv.s || argv.send) {
             var targetPath = path.resolve(zipFolder, appName),
@@ -157,6 +175,29 @@ function makeDiffZip({ jsVersion, platform }) {
                 if (message.type === 'done') {
                     n.kill();
                     shell.cp('dist/js/' + jsVersion + '.zip', targetPath);
+
+                    var client = new OSS({
+                        region: 'oss-cn-hangzhou',
+                        accessKeyId: 'PrIUOjuApfQbBs2b',
+                        accessKeySecret: '4TwjLaHtCxuWm3VRAOpltao5V88cI4',
+                        bucket: 'app-youdanhui'
+                    });
+                    co(function* () {
+                        // use 'chunked encoding'
+                        console.log('targetPath:'+targetPath+'/'+ jsVersion + '.zip');
+                        var stream = fs.createReadStream(targetPath+'/'+ jsVersion + '.zip');
+                        var result = yield client.putStream('dist/js/' + jsVersion + '.zip', stream);
+                        console.log(result);
+                        // don't use 'chunked encoding'
+                        // var stream = fs.createReadStream(targetPath+'/'+ jsVersion + '.zip');
+                        // var size = fs.statSync(targetPath+'/'+ jsVersion + '.zip').size;
+                        // var result = yield client.putStream(
+                        //     'dist/js/' + jsVersion + '.zip', stream, {contentLength: size});
+                        // console.log(result);
+                    }).catch(function (err) {
+                        console.log(err);
+                    });
+
                     logger.success('publish success!');
                     logger.sep();
                     logger.log('app name: %s', appName);
@@ -166,7 +207,9 @@ function makeDiffZip({ jsVersion, platform }) {
                 }
             })
             n.send({
-                jsVersion: jsVersion
+                jsVersion: jsVersion,
+                diffpwd:zipFolder,
+                appName:appName,
             })
         } else {
             resolve({ jsVersion, platform })
@@ -180,12 +223,23 @@ function writeJson({ jsVersion, platform }) {
             file = path.resolve(process.cwd(), 'dist/version.json'),
             jsPath = process.cwd() + '/dist/js/',
             tmpJsPath = process.cwd() + '/dist/_js/';
+        var times = new Date().getTime();
+        var url_sign = md5(""+times);
 
         shell.mkdir('-p', tmpJsPath);
         shell.cp('-r', process.cwd() + '/dist/js/**/*.zip', tmpJsPath);
         shell.rm('-rf', jsPath);
         fs.rename(tmpJsPath, jsPath);
         if (requestUrl) {
+
+            logger.log('times---: %s', ""+times);
+            logger.log('url_sign---: %s', ""+url_sign);
+            logger.log('versionInfo---: %s', ""+JSON.stringify(versionInfo));
+            logger.log('requestUrl---: %s', ""+requestUrl);
+
+            versionInfo['times'] = times;
+            versionInfo['url_sign'] = url_sign;
+            
             __request.post(requestUrl, {
                 form: versionInfo
             }, function(error, response, body) {
@@ -256,11 +310,16 @@ function minWeex(platform) {
     })
 }
 
-function weexErosHandler({ jsVersion, platform }) {
+function weexErosHandler({jsVersion, platform}) {
+    var config_name = 'eros.native.js';
+    if (argv.config) {
+        config_name = 'app/'+argv.config+'.native.js';
+    }
+
     return new Promise((resolve) => {
         var params = {
             jsZipPath: path.resolve(process.cwd(), './dist/js/' + jsVersion + '.zip'),
-            erosNative: require(path.resolve(process.cwd(), './config/eros.native.js')),
+            erosNative: require(path.resolve(process.cwd(), './config/'+config_name)),
             bundleConfig: _.assign({
                 filesMd5: versionMap
             }, versionInfo)

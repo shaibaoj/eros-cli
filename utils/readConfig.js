@@ -8,14 +8,25 @@
 
 var fs = require('fs'),
     _ = require('lodash'),
+    argv = require('yargs').argv,
     path = require('path');
 
 var CONFIG = null;
 
 function readAllConfig() {
+    var config_name = 'eros.native.js';
+    var config_name_dev = 'eros.dev.js';
+
+    if (argv.config) {
+        config_name = 'app/'+argv.config+'.native.js';
+    }
+    if (argv.dev) {
+        config_name_dev = argv.dev+'.dev.js';
+    }
+
     var configPath = path.join(process.cwd(), './config.js'),
-        erosDevPath = path.join(process.cwd(), './config/eros.dev.js'),
-        erosConfigPath = path.resolve(process.cwd(), './config/eros.native.js');
+        erosDevPath = path.join(process.cwd(), './config/'+config_name_dev),
+        erosConfigPath = path.resolve(process.cwd(), './config/'+config_name);
 
     // 兼容weex-eros 
     if (fs.existsSync(erosConfigPath) && fs.existsSync(erosDevPath)) {
@@ -42,7 +53,17 @@ function readAllConfig() {
 }
 
 function readNativeConfig() {
-    return require(path.resolve(process.cwd(), './config/eros.native.js'))
+    var config_name = 'eros.native.js';
+    var config_name_dev = 'eros.dev.js';
+
+    if (argv.config) {
+        config_name = 'app/'+argv.config+'.native.js';
+    }
+    if (argv.dev) {
+        config_name_dev = argv.dev+'.dev.js';
+    }
+
+    return require(path.resolve(process.cwd(), './config/'+config_name))
 }
 
 function get(key) {
