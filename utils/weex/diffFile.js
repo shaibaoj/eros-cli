@@ -62,7 +62,7 @@ function makeDiff(jsVersion, newZipFolder) {
                         logger.success(`-------------makeDiff----jsVersion--1--${jsVersion} `)
 
 
-                        var requestUrl_diff ='http://ok.haopintui.net/app/publish/diff';
+                        var requestUrl_diff ='http://www.haopintui.net/api/app/publish/diff';
 
                         if (requestUrl_diff) {
                             __request.post(requestUrl_diff, {
